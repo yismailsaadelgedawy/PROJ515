@@ -1,0 +1,75 @@
+<mxfile host="Electron" modified="2024-11-12T18:14:58.249Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/23.1.5 Chrome/120.0.6099.109 Electron/28.1.0 Safari/537.36" etag="AAeHNptwlB2E-XrBFRBp" version="23.1.5" type="device">
+  <diagram name="Page-1" id="DtVVvbjG7Pll9yCFLiOf">
+    <mxGraphModel dx="957" dy="478" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="hg47ybG79ehnWjhbTLgx-1" value="" style="whiteSpace=wrap;html=1;aspect=fixed;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="320" y="200" width="120" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="hg47ybG79ehnWjhbTLgx-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.324;entryY=0.998;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="hg47ybG79ehnWjhbTLgx-2" target="hg47ybG79ehnWjhbTLgx-1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="329.8571428571429" y="340" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hg47ybG79ehnWjhbTLgx-2" value="Temperature Sensors" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="290" y="390" width="80" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="hg47ybG79ehnWjhbTLgx-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.545;entryY=1;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="hg47ybG79ehnWjhbTLgx-3" target="hg47ybG79ehnWjhbTLgx-1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="440.1428571428571" y="340" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hg47ybG79ehnWjhbTLgx-3" value="Humidity Sensors" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="400" y="390" width="80" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="hg47ybG79ehnWjhbTLgx-7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="hg47ybG79ehnWjhbTLgx-4" target="hg47ybG79ehnWjhbTLgx-5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="hg47ybG79ehnWjhbTLgx-4" value="Accelerometer" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="30" y="235" width="90" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="hg47ybG79ehnWjhbTLgx-5" value="Input Anti Aliasing Filter" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="160" y="230" width="80" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="hg47ybG79ehnWjhbTLgx-8" value="" style="edgeStyle=none;orthogonalLoop=1;jettySize=auto;html=1;rounded=0;" edge="1" parent="1">
+          <mxGeometry width="100" relative="1" as="geometry">
+            <mxPoint x="70" y="190" as="sourcePoint" />
+            <mxPoint x="70" y="235" as="targetPoint" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hg47ybG79ehnWjhbTLgx-9" value="Input Bee Vibrations&lt;div&gt;&lt;br/&gt;&lt;/div&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="10" y="159" width="130" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="hg47ybG79ehnWjhbTLgx-12" value="MCU &lt;br&gt;&lt;i&gt;(WiFi capable)&lt;/i&gt;" style="whiteSpace=wrap;html=1;aspect=fixed;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="470" y="209.5" width="91" height="91" as="geometry" />
+        </mxCell>
+        <mxCell id="hg47ybG79ehnWjhbTLgx-17" value="MCU" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="355" y="200" width="50" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="hg47ybG79ehnWjhbTLgx-24" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="hg47ybG79ehnWjhbTLgx-18" target="hg47ybG79ehnWjhbTLgx-12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="hg47ybG79ehnWjhbTLgx-18" value="FFT" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="388" y="245" width="46" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="hg47ybG79ehnWjhbTLgx-19" value="Digital BPF" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="333" y="240" width="46" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="hg47ybG79ehnWjhbTLgx-23" value="" style="endArrow=none;html=1;rounded=0;exitX=1.004;exitY=0.431;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="hg47ybG79ehnWjhbTLgx-19" target="hg47ybG79ehnWjhbTLgx-18">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="380" y="255" as="sourcePoint" />
+            <mxPoint x="380" y="255" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hg47ybG79ehnWjhbTLgx-29" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=-0.019;entryY=0.438;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="240" y="255" as="sourcePoint" />
+            <mxPoint x="332.99600000000004" y="255.17" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

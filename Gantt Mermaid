@@ -1,0 +1,21 @@
+flowchart TD
+  Planning --> Background_Research
+  Planning --> Design_Phase
+  
+  Development --> Hardware_Dev
+  Development --> Software_Dev
+  
+  Testing --> Component_Testing
+  Testing --> Integration_Testing
+  Testing --> System_Testing
+  
+  Deployment --> Final_Assembly
+  Deployment --> Field_Testing
+  
+  Background_Research --> Design_Phase
+  Design_Phase --> Hardware_Dev
+  Design_Phase --> Software_Dev
+  Component_Testing --> Integration_Testing 
+  Integration_Testing --> System_Testing
+  System_Testing --> Final_Assembly
+  Final_Assembly --> Field_Testing

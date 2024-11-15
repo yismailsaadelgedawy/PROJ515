@@ -1,21 +1,37 @@
-flowchart TD
-  Planning --> Background_Research
-  Planning --> Design_Phase
+---
+config:
+  todayMarker: off
+  layout: fixed
+  theme: neo
   
-  Development --> Hardware_Dev
-  Development --> Software_Dev
-  
-  Testing --> Component_Testing
-  Testing --> Integration_Testing
-  Testing --> System_Testing
-  
-  Deployment --> Final_Assembly
-  Deployment --> Field_Testing
-  
-  Background_Research --> Design_Phase
-  Design_Phase --> Hardware_Dev
-  Design_Phase --> Software_Dev
-  Component_Testing --> Integration_Testing 
-  Integration_Testing --> System_Testing
-  System_Testing --> Final_Assembly
-  Final_Assembly --> Field_Testing
+---
+gantt
+    title Project Timeline Overview
+    dateFormat  YYYY-MM-DD
+    section Planning
+    Background Research         :2024-09-26, 45d
+    Preliminary Design Phase    :2024-10-20, 30d
+    section Development
+    Detailed Design Development :2024-11-15, 40d
+    Hardware Development        :2024-11-20, 85d
+    Software Development        :2024-11-20, 110d
+    section Testing
+    Component Testing           :2024-12-30, 75d
+    Integration Testing         :2025-01-15, 75d
+    section Deployment
+    Final Assembly              :2025-02-15, 45d
+    Field Testing               :2025-03-15, 30d
+    section Review
+    Project Review              :2025-04-01, 20d
+    section Report Submission
+    Report Development          :2025-03-02, 60d
+    Viva Development            :2025-04-01, 30d
+    Showcase Preparation        :2025-04-15, 16d
+    section Milestones
+    IP Landscape Submission : milestone, m1, 2024-10-22, 2m
+    IP Landscape Submission : milestone, m1, 2024-11-20, 2m
+    Project Execution Plan Sumbission : milestone, m1, 2024-11-20, 2m
+    Executive Summary : milestone, m1, 2025-03-04, 2m
+    Final Design Presentation :  milestone, m1, 2025-05-01, 2m
+    Project Showcase :  milestone, m1, 2025-05-02, 2m
+    Report Submission :  milestone, m1, 2025-05-01, 2m

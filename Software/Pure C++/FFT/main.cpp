@@ -6,14 +6,14 @@ using std::complex;
 using std::pow;
 
 constexpr float pi = 3.14159;
-constexpr uint8_t N = 1<<4; // ensures it is a power of 2
+constexpr uint8_t N = 1<<3; // ensures it is a power of 2
 
 
 complex<double> z3(0,-2*pi/N); // -2*pi*j/N
 complex<double> w = exp(z3);    // twiddle factor, w = e^(-2*pi*j/N)
 
 
-double x[N] = {1,0,0,0,1,1,1,0,0,0,0,1,1,1,0,0}; // input samples array
+double x[N] = {1,0,-1,0,0,0,0,0}; // input samples array
 complex<double> x_1[N]; // array 1 - time domain (scrambled) -- temporary, will optimise out later!
 complex<double> x_2[N]; // array 2 - time domain
 // complex<double> X[N]; // output frequency domain; uninit globals and statics are zero

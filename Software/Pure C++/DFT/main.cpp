@@ -6,7 +6,7 @@ using std::complex;
 using std::pow;
 
 constexpr float pi = 3.14159;
-constexpr uint8_t N = 1<<4; // ensures it is a power of 2
+constexpr uint16_t N = 1<<10; // ensures it is a power of 2
 
 
 complex<double> z3(0,-2*pi/N); // -2*pi*j/N

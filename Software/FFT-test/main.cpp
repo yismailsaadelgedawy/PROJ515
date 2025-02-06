@@ -29,7 +29,7 @@ using std::pow;
 constexpr float pi = 3.14159;
 constexpr uint16_t N = 1<<10; // ensures it is a power of 2
 
-constexpr double f_res = (1.0f)/(N * 1.0f/fs);  // frequency resolution
+constexpr double f_res = (1.0f)/(N * 1.0f/fs);  // frequency resolution (currently it is 8Hz - good enough; saves memory)
 
 
 complex<double> z3(0,-2*pi/N); // -2*pi*j/N

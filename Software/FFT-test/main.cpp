@@ -5,6 +5,9 @@
 #include <cmath>
 #include <chrono>
 
+// Implementation of the Constant Geometry FFT algorithm
+// by YEG
+
 #define test_frequency 500
 
 // IO
@@ -92,7 +95,7 @@ int main() {
         uint16_t rep_cnt = 0;
         for (int s=0; s<log2(N); s++) {
 
-            if(s > 0 && s > 1) repetitions = repetitions/2; // r = r/(2^s-1)
+            if(s > 0 && s > 1) repetitions /= 2; // r = r/2
 
             // when done, switch the polarities of the x1 and x2 arrays
             mode = !mode;

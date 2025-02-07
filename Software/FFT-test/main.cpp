@@ -33,14 +33,15 @@ constexpr float pi = 3.14159;
 constexpr uint16_t N = 1<<10; // ensures it is a power of 2
 
 constexpr double f_res = (1.0f)/(N * 1.0f/fs);  // frequency resolution (currently it is 8Hz - good enough; saves memory)
+constexpr uint16_t k_test = test_frequency/(uint16_t)f_res; // obtains the frequency bin, k, corresponding to test_frequency
 
 
-complex<double> z3(0,-2*pi/N); // -2*pi*j/N
-complex<double> w = exp(z3);    // twiddle factor, w = e^(-2*pi*j/N)
+constexpr complex<double> z3(0,-2*pi/N);    // -2*pi*j/N
+const complex<double> w = exp(z3);          // twiddle factor, w = e^(-2*pi*j/N) - (exp isn't a constexpr)
 
-double x[N]; // input time domain
-complex<float> x_1[N]; // array 1 - time domain (scrambled) -- temporary, will optimise out later!
-complex<float> x_2[N]; // array 2 - time domain
+double x[N];                    // input time domain
+complex<float> x_1[N];          // array 1 - time domain (scrambled)
+complex<float> x_2[N];          // array 2 - time domain; two arrays due to constant geometry
 complex<float> W_array[N/2];    // twiddle factors (precomputed)
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -54,7 +55,8 @@ void sampling_ISR();
 
 int main() {
 
-    // precompute twiddle factors
+    // precompute twiddle factors - ONCE
+    // optimises for speed
     for (int i=0; i<(N/2); i++) {
         
         W_array[i] = pow(w,i);  // W^0, W^1, ... W^(N/2 - 1)
@@ -67,7 +69,6 @@ int main() {
         sleep();    // wait for ISR
 
         // start reading values...
-        
         for(int n=0; n<N; n++) {
             x[n] = (mic.read() - 0.5) * 100.0f; // 0.5 to remove DC offset; scaled to make numbers nicer to work with
             sleep();    // will only wake up by sampling ISR
@@ -75,7 +76,7 @@ int main() {
 
         t.detach(); // stop reading
         
-        /////////////////////////////FFT/////////////////////////////
+        ///////////////////////////// FFT /////////////////////////////
 
         // 1 - scramble data
         for (int i=0; i<N; i++) {
@@ -84,33 +85,34 @@ int main() {
             x_1[i] = x[i_scrambled];
         }
 
-        
-
         // 2 - perform the FFT
         // s: current stage (0 indexed)
         // n: current butterfly (0 indexed)
-        bool mode = 1;
-        uint16_t w_idx = 0;
-        uint16_t repetitions = (2*N)/8; // number of repeats/holds
-        uint16_t rep_cnt = 0;
+        bool mode = 1;                          // determines polarity of x1 and x2 arrays
+        uint16_t w_idx = 0;                     // twiddle factor index
+        uint16_t repetitions = (2*N)/8;         // number of repeats/holds
+        uint16_t rep_cnt = 0;                   // counter to implement the repeats
         for (int s=0; s<log2(N); s++) {
 
+            // only from third stage onwards
             if(s > 0 && s > 1) repetitions /= 2; // r = r/2
 
-            // when done, switch the polarities of the x1 and x2 arrays
-            mode = !mode;
-            rep_cnt = 0;    // and reset the counter as well
+            // when done:
+            mode = !mode;   // switch the polarities of the x1 and x2 arrays;
+            rep_cnt = 0;    // reset the counter;
             w_idx = 0;      // reset index
 
             // calculate the step size of current stage
             uint16_t step = N/( 1<<(s+1) );
             
+            // iterates over stages
             for (int n=0; n<(N/2); n++) {
 
+                // only on first and last stage
                 if(s==0 || s == log2(N)-1) {
                     // induce overflow
                     // prevents out of bounds idx
-                    w_idx = (n*step > (N/2)-1) ? 0 : (n*step);  // warning: reinit overhead!
+                    w_idx = (n*step > (N/2)-1) ? 0 : (n*step);
                 }
 
                 else {
@@ -118,12 +120,8 @@ int main() {
                     rep_cnt++;
                     if(rep_cnt > repetitions) {
 
-                        // induce overflow
-                        // prevents out of bounds idx
-                        // w_idx = (n*step/repetitions > (N/2)-1) ? 0 : (n*step/repetitions);  // warning: reinit overhead!
-                        w_idx += step;
-
-                        rep_cnt = 1; // reset the counter
+                        w_idx += step;  // when done repeating, go to next twiddle index
+                        rep_cnt = 1;    // reset the counter
 
                     }
                 }
@@ -135,7 +133,7 @@ int main() {
                     x_2[(N/2)+n] = x_1[2*n] - W_array[w_idx]*( x_1[(2*n)+1] );
                 }
                 else {
-                    x_1[n] = x_2[2*n] + W_array[w_idx]*( x_2[(2*n)+1]) ;               
+                    x_1[n] = x_2[2*n] + W_array[w_idx]*( x_2[(2*n)+1] );               
                     x_1[(N/2)+n] = x_2[2*n] - W_array[w_idx]*( x_2[(2*n)+1] );
                 }       
 
@@ -145,20 +143,15 @@ int main() {
         }
 
 
-        /////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////
 
         // print out test frequency
 
-        if(!mode) std::cout << test_frequency << " Hz: " << abs(x_2[test_frequency/(uint16_t)f_res]) << std::endl;
-        else std::cout << test_frequency << " Hz: " << abs(x_1[test_frequency/(uint16_t)f_res]) << std::endl;
-        
-
-        
-
+        if(!mode) std::cout << test_frequency << " Hz: " << abs(x_2[k_test]) << std::endl;
+        else std::cout << test_frequency << " Hz: " << abs(x_1[k_test]) << std::endl;
         
 
     }
-
     
    
 }
@@ -184,4 +177,5 @@ uint32_t bit_reverse(uint32_t num, int numBits) {
     }
     
     return reversed;
+
 }

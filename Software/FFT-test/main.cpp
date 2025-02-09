@@ -11,15 +11,15 @@
 #define test_frequency 500
 
 // IO
-AnalogIn mic(PA_3); // mic/acc input
-DigitalOut samp_pin(PC_0); // test output pin
+AnalogIn mic(PA_3);             // mic/acc input
+DigitalOut samp_pin(PC_0);      // test output pin
 
 // sampling timer
 Ticker t;
 
 // timing
-constexpr uint16_t fs = 8192;   // sampling frequency
-constexpr std::chrono::microseconds Ts(1000000/fs); // sampling time period (us)
+constexpr uint16_t fs = 8192;                           // sampling frequency
+constexpr std::chrono::microseconds Ts(1000000/fs);     // sampling time period (us)
 
 
 
@@ -30,10 +30,10 @@ using std::pow;
 
 
 constexpr float pi = 3.14159;
-constexpr uint16_t N = 1<<10; // ensures it is a power of 2
+constexpr uint16_t N = 1<<10;   // ensures it is a power of 2
 
-constexpr double f_res = (1.0f)/(N * 1.0f/fs);  // frequency resolution (currently it is 8Hz - good enough; saves memory)
-constexpr uint16_t k_test = test_frequency/(uint16_t)f_res; // obtains the frequency bin, k, corresponding to test_frequency
+constexpr double f_res = (1.0f)/(N * 1.0f/fs);                  // frequency resolution (currently it is 8Hz - good enough; saves memory)
+constexpr uint16_t k_test = test_frequency/(uint16_t)f_res;     // obtains the frequency bin, k, corresponding to test_frequency
 
 
 constexpr complex<double> z3(0,-2*pi/N);    // -2*pi*j/N
@@ -43,6 +43,7 @@ double x[N];                    // input time domain
 complex<float> x_1[N];          // array 1 - time domain (scrambled)
 complex<float> x_2[N];          // array 2 - time domain; two arrays due to constant geometry
 complex<float> W_array[N/2];    // twiddle factors (precomputed)
+complex<float> mul;             // holds the result of the W*B product; optimises 2 multiplications down to 1 
 
 ///////////////////////////////////////////////////////////////////////////////////
 
@@ -59,19 +60,19 @@ int main() {
     // optimises for speed
     for (int i=0; i<(N/2); i++) {
         
-        W_array[i] = pow(w,i);  // W^0, W^1, ... W^(N/2 - 1)
+        W_array[i] = pow(w,i);          // W^0, W^1, ... W^(N/2 - 1)
     }
 
     while(1) {
 
-        // setup sampling ISR
-        t.attach(sampling_ISR, Ts);
-        sleep();    // wait for ISR
+        
+        t.attach(sampling_ISR, Ts);     // setup sampling ISR
+        sleep();                        // wait for ISR
 
         // start reading values...
         for(int n=0; n<N; n++) {
-            x[n] = (mic.read() - 0.5) * 100.0f; // 0.5 to remove DC offset; scaled to make numbers nicer to work with
-            sleep();    // will only wake up by sampling ISR
+            x[n] = (mic.read() - 0.5) * 100.0f;     // 0.5 to remove DC offset; scaled to make numbers nicer to work with
+            sleep();                                // will only wake up by sampling ISR
         }
 
         t.detach(); // stop reading
@@ -129,24 +130,27 @@ int main() {
 
                 // this MUST be done first
                 if(!mode) {
-                    x_2[n] = x_1[2*n] + W_array[w_idx]*( x_1[(2*n)+1] );               
-                    x_2[(N/2)+n] = x_1[2*n] - W_array[w_idx]*( x_1[(2*n)+1] );
+                    mul = W_array[w_idx]*( x_1[(2*n)+1] );  // compute the product only once
+
+                    x_2[n] = x_1[2*n] + mul;               
+                    x_2[(N/2)+n] = x_1[2*n] - mul;
                 }
                 else {
-                    x_1[n] = x_2[2*n] + W_array[w_idx]*( x_2[(2*n)+1] );               
-                    x_1[(N/2)+n] = x_2[2*n] - W_array[w_idx]*( x_2[(2*n)+1] );
-                }       
+                    mul = W_array[w_idx]*( x_2[(2*n)+1] );  // compute the product only once
+
+                    x_1[n] = x_2[2*n] + mul;               
+                    x_1[(N/2)+n] = x_2[2*n] - mul;
+                }     
 
             }
             
             
         }
 
-
+        
         ///////////////////////////////////////////////////////////////
 
         // print out test frequency
-
         if(!mode) std::cout << test_frequency << " Hz: " << abs(x_2[k_test]) << std::endl;
         else std::cout << test_frequency << " Hz: " << abs(x_1[k_test]) << std::endl;
         

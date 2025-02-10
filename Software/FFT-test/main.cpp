@@ -8,27 +8,22 @@
 // Implementation of the Constant Geometry FFT algorithm
 // by YEG
 
-#define test_frequency 1000
-#define piping_frequency 1200
-#define detection_threshold 1000
+// parameters
+#define test_frequency 1000             // a test frequency used to ensure FFT works as intended
+#define piping_frequency 1200           // the frequency of queen piping
+#define detection_threshold 1000        // the magnitude required to be classified as "detected"
 
 // IO
 AnalogIn mic(PA_3);             // mic/acc input
 DigitalOut samp_pin(PC_0);      // test output pin
-DigitalOut red(PB_14);
-DigitalOut green(PB_0);
-DigitalOut blue(PB_7);
+DigitalOut red(PB_14);          // red LED
+DigitalOut green(PB_0);         // green LED
+DigitalOut blue(PB_7);          // blue LED
 
-// sampling timer
-Ticker t;
-// piping timer
-Timer tmr_p;
-// piping counters
-uint8_t cnt_long_pulse;
-uint8_t cnt_short_pulse;
-// piping flags
-bool long_pulse;
-bool piping_detected;
+// Timers
+Ticker t;       // sampling timer
+Timer tmr_p;    // timer used for piping
+
 
 // timing
 constexpr uint16_t fs = 8192;                           // sampling frequency
@@ -47,7 +42,7 @@ constexpr uint16_t N = 1<<9;   // ensures it is a power of 2
 
 constexpr double f_res = (1.0f)/(N * 1.0f/fs);                  // frequency resolution (currently it is 8Hz - good enough; saves memory)
 constexpr uint16_t k_test = test_frequency/(uint16_t)f_res;     // obtains the frequency bin, k, corresponding to test_frequency
-constexpr uint16_t k_p = piping_frequency/(uint16_t)f_res;     // obtains the frequency bin, k, corresponding to piping_frequency
+constexpr uint16_t k_p = piping_frequency/(uint16_t)f_res;      // obtains the frequency bin, k, corresponding to piping_frequency
 
 
 constexpr complex<double> z3(0,-2*pi/N);    // -2*pi*j/N
@@ -58,21 +53,35 @@ complex<float> x_1[N];          // array 1 - time domain (scrambled)
 complex<float> x_2[N];          // array 2 - time domain; two arrays due to constant geometry
 complex<float> W_array[N/2];    // twiddle factors (precomputed)
 complex<float> mul;             // holds the result of the W*B product; optimises 2 multiplications down to 1 
-uint16_t mag1,mag2,mag_avg;
+uint16_t mag1,mag2,mag_avg;     // 2 magnitude samples (n and n-1), and an average of them
 
 ///////////////////////////////////////////////////////////////////////////////////
 
+//////////////////// PIPING STUFF ////////////////////
+
+// piping counters
+uint8_t cnt_long_pulse;         // determines how long the "long piping pulse" is
+uint8_t cnt_short_pulse;        // counts number of shorter piping pulses
+// piping flags
+bool long_pulse;                // was a long pulse detected?
+bool piping_detected;           // was piping detected?
+
+//////////////////////////////////////////////////////
+
+////////// DEBUG STUFF //////////
+
+// #define DEBUG    // debug prints on/off
+// #define TUNING   // tuning prints on/off
+Timer tmr;          // loop timer
+
+/////////////////////////////////
+
 
 // functions
-uint32_t bit_reverse(uint32_t num, int numBits);
+uint32_t bit_reverse(uint32_t num, int numBits);    // bit scrambling algorithm
 
 // ISRs
-void sampling_ISR();
-
-// debug stuff
-// #define DEBUG    // switches debug prints on/off
-// #define TUNING   // swtiches tuning prints on/off
-Timer tmr;
+void sampling_ISR();                                // sampling interrupt service routine
 
 
 int main() {
@@ -122,7 +131,7 @@ int main() {
         for (int s=0; s<log2(N); s++) {
 
             // only from third stage onwards
-            if(s > 0 && s > 1) repetitions /= 2; // r = r/2
+            if(s > 0 && s > 1) repetitions = repetitions >> 1; // r = r/2; compiler will probably optimise into an LSR, but better to be safe
 
             // when done:
             mode = !mode;   // switch the polarities of the x1 and x2 arrays;
@@ -212,7 +221,8 @@ int main() {
 
         // piping detection //
 
-
+        // if piping isn't detected
+        // run the algorithm
         if(!piping_detected) {
         
             // 1 - detecting the initial long pulse
@@ -270,6 +280,8 @@ int main() {
 
         }
 
+        // if piping is detected
+        // do something
         else {
 
             blue = !blue;
@@ -280,7 +292,7 @@ int main() {
 
         // TODO:
         // automatically determine loop time once at the start of the program
-        // something to disable the piping_detected flag
+        // something to disable the piping_detected flag (timer/manually)
         // deal with following condition: detected long pulse, but no short pulse; reset
 
         

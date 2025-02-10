@@ -9,9 +9,9 @@
 // by YEG
 
 // parameters
-#define test_frequency 1000             // a test frequency used to ensure FFT works as intended
-#define piping_frequency 1200           // the frequency of queen piping
-#define detection_threshold 1000        // the magnitude required to be classified as "detected"
+#define test_frequency      1000            // a test frequency used to ensure FFT works as intended
+#define piping_frequency    1200            // the frequency of queen piping
+#define detection_threshold 1000            // the magnitude required to be classified as "detected" (100% volume monitor speakers)
 
 // IO
 AnalogIn mic(PA_3);             // mic/acc input

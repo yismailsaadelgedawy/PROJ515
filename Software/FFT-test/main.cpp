@@ -8,10 +8,11 @@
 // Implementation of the Constant Geometry FFT algorithm
 // by YEG
 
-// parameters
-#define test_frequency      1000            // a test frequency used to ensure FFT works as intended
+// general parameters
+#define test_frequency      1200            // a test frequency used to ensure FFT works as intended
 #define piping_frequency    1200            // the frequency of queen piping
-#define detection_threshold 1000            // the magnitude required to be classified as "detected" (100% volume monitor speakers)
+#define detection_threshold 1400            // the magnitude required to be classified as "ON" (100% volume monitor speakers)
+#define off_threshold       1000            // the magnitude required to be classified as "OFF" (100% volume monitor speakers)
 
 // IO
 AnalogIn mic(PA_3);             // mic/acc input
@@ -21,13 +22,14 @@ DigitalOut green(PB_0);         // green LED
 DigitalOut blue(PB_7);          // blue LED
 
 // Timers
+Timer tmr;      // general timer
 Ticker t;       // sampling timer
 Timer tmr_p;    // timer used for piping
-
 
 // timing
 constexpr uint16_t fs = 8192;                           // sampling frequency
 constexpr std::chrono::microseconds Ts(1000000/fs);     // sampling time period (us)
+uint8_t loop_time_state;                                // used to control loop time calculation
 
 
 
@@ -37,8 +39,8 @@ using std::complex;
 using std::pow;
 
 
-constexpr float pi = 3.14159;
-constexpr uint16_t N = 1<<9;   // ensures it is a power of 2
+constexpr float pi = 3.14159;   // pi :)
+constexpr uint16_t N = 1<<9;    // ensures it is a power of 2
 
 constexpr double f_res = (1.0f)/(N * 1.0f/fs);                  // frequency resolution (currently it is 8Hz - good enough; saves memory)
 constexpr uint16_t k_test = test_frequency/(uint16_t)f_res;     // obtains the frequency bin, k, corresponding to test_frequency
@@ -54,6 +56,7 @@ complex<float> x_2[N];          // array 2 - time domain; two arrays due to cons
 complex<float> W_array[N/2];    // twiddle factors (precomputed)
 complex<float> mul;             // holds the result of the W*B product; optimises 2 multiplications down to 1 
 uint16_t mag1,mag2,mag_avg;     // 2 magnitude samples (n and n-1), and an average of them
+bool avg = 1;                   // controls whether moving average is enabled or not; enabled by default
 
 ///////////////////////////////////////////////////////////////////////////////////
 
@@ -65,14 +68,21 @@ uint8_t cnt_short_pulse;        // counts number of shorter piping pulses
 // piping flags
 bool long_pulse;                // was a long pulse detected?
 bool piping_detected;           // was piping detected?
+// variables
+uint8_t long_samples_expected;
+constexpr uint8_t short_samples_expected = 6;
+// parameters
+constexpr uint16_t long_pulse_duration_ms = 900;
+constexpr uint16_t short_pulses_duration_ms = 5000;
 
 //////////////////////////////////////////////////////
 
 ////////// DEBUG STUFF //////////
 
-// #define DEBUG    // debug prints on/off
-// #define TUNING   // tuning prints on/off
-Timer tmr;          // loop timer
+// #define DEBUG            // debug prints on/off
+// #define TUNING           // tuning prints on/off
+#define PIPING           // piping algorithm on/off
+#define PIPING_DEBUG     // piping debug prints on/off
 
 /////////////////////////////////
 
@@ -94,13 +104,7 @@ int main() {
     }
 
     while(1) {
-
-        #ifdef DEBUG 
-            tmr.start();
-        #endif
-
-
-
+        
         t.attach(sampling_ISR, Ts);     // setup sampling ISR
         sleep();                        // wait for ISR
 
@@ -182,119 +186,158 @@ int main() {
             
         }
 
-        
         ///////////////////////////////////////////////////////////////
 
+        // print out test frequency
         #ifdef DEBUG
-            tmr.stop();
-            std::cout << "Loop time (ms): " << tmr.elapsed_time().count()/1000 << std::endl;
-            tmr.reset();
-
-            // print out test frequency
-            // if(!mode) std::cout << test_frequency << " Hz: " << abs(x_2[k_test]) << std::endl;
-            // else std::cout << test_frequency << " Hz: " << abs(x_1[k_test]) << std::endl;
+            if(!mode) std::cout << test_frequency << " Hz: " << abs(x_2[k_test]) << std::endl;
+            else std::cout << test_frequency << " Hz: " << abs(x_1[k_test]) << std::endl;
         #endif
 
+        // polarity depends on mode remember; choose the output array accordingly
         if(!mode) {
-            mag2 = mag1;            // old sample
-            mag1 = abs(x_2[k_p]);   // new sample
+            mag2 = mag1;            // old sample (n-1)
+            mag1 = abs(x_2[k_p]);   // new sample (n)
         }
         else {
             mag2 = mag1;
             mag1 = abs(x_1[k_p]);
         }
 
-        // moving average (2 samples)
-        mag_avg = (mag1+mag2)/2;
+        // calculation of loop time (end)
+        // and print loop time
+        if(loop_time_state == 1) {
+            tmr.stop();
+            uint16_t loop_time_ms = tmr.elapsed_time().count()/1000;
+            std::cout << "Loop time (ms): " << loop_time_ms << std::endl;
+            tmr.reset();
+            loop_time_state = 2;
 
+            // calculate the number of expected long piping samples
+            // within a 1sec time window; function of loop time!
+            long_samples_expected = long_pulse_duration_ms/loop_time_ms;
+        }
+
+        // --- DO NOT PUT CODE HERE --- //
+
+        // may enable/disable moving average (2 samples) at will
+        if(avg) mag_avg = (mag1+mag2)/2;
+        else mag_avg = mag1;
+
+        // --- DO NOT PUT CODE HERE --- //
+
+        // calculation of loop time (start)
+        // how long it takes to obtain a magnitude in the frequency domain
+        if(loop_time_state == 0) {
+            tmr.start();
+            loop_time_state = 1;
+        }
+        
+        
         // simple test for tuning
         // to determine detection_threshold
         #ifdef TUNING
-            if(mag_avg > 1000) {
+            if(mag_avg > detection_threshold) {
                 green = 1;
                 std::cout << mag_avg << std::endl;
             }
-            else green= 0;
+            else green = 0;
         #endif
 
 
+        // piping detection
+        #ifdef PIPING
 
-        // piping detection //
-
-        // if piping isn't detected
-        // run the algorithm
-        if(!piping_detected) {
-        
-            // 1 - detecting the initial long pulse
-            // the pulse lasts about 1sec
-            // loop time is measured to be 87ms 
-            // so 1sec of a continous f, results in 11.5 samples
+            // if piping isn't detected
+            // run the algorithm
+            if(!piping_detected) {
             
-            if(!long_pulse) {
+                // 1 - detecting the initial long pulse
+                // the pulse lasts about 1sec
+                // loop time is measured to be 87ms 
+                // so 1sec of a continous f, results in 11.5 samples
+                
+                if(!long_pulse) {
 
-                // first, detect the f
-                if(mag_avg > detection_threshold) {
-                    tmr_p.start();  // start 1 second window
-                    cnt_long_pulse++;   // increment when f is detected
-                }
-                // when window elapses, determine whether it was the long piping pulse or not
-                if(tmr_p.elapsed_time().count()/1000 > 1000) {
-                    tmr_p.stop();
-                    tmr_p.reset();
-                    
-                    if(cnt_long_pulse >= 12) {
-                        long_pulse = 1;    // long pulse has been detected
-                        cnt_long_pulse = 0; // reset counter
-                        red = 1;
+                    // first, detect the f
+                    if(mag_avg > detection_threshold) {
+                        tmr_p.start();      // start 1 second window
+                        cnt_long_pulse++;   // increment when f is detected
                     }
-                    cnt_long_pulse = 0; // reset counter
+                    // when window elapses, determine whether it was the long piping pulse or not
+                    if(tmr_p.elapsed_time().count()/1000 > long_pulse_duration_ms) {
+                        tmr_p.stop();
+                        tmr_p.reset();
+
+                        #ifdef PIPING_DEBUG
+                            std::cout << "long: " << (int)cnt_long_pulse << std::endl;
+                        #endif
+
+                        if(cnt_long_pulse >= long_samples_expected) {
+                            long_pulse = 1;     // long pulse has been detected
+                            cnt_long_pulse = 0; // reset counter
+                            red = 1;
+                        }
+                        cnt_long_pulse = 0;     // reset counter
+                    }
+
+                }
+
+                // 2 - detecting the shorter pulses
+                // in a window of 5 seconds
+                // from different audio recordings, about 5 or 6 pulses occur within this time frame
+
+                else {
+
+                    tmr_p.start();      // start 5 second window straight away
+                    avg = 0;            // disable averaging; faster response; more appropriate for the short pulses we are looking for
+
+                    // then, detect the f
+                    // pulse detection
+                    // rising edge detector (think Verilog)
+                    if(mag1 > detection_threshold && mag2 < off_threshold) cnt_short_pulse++;
+                    
+                    // when window elapses, determine whether it was the long piping pulse or not
+                    if(tmr_p.elapsed_time().count()/1000 > short_pulses_duration_ms) {
+                        tmr_p.stop();
+                        tmr_p.reset();
+
+                        avg = 1;    // re-enable averaging
+
+                        #ifdef PIPING_DEBUG
+                            std::cout << "short: " << (int)cnt_short_pulse << std::endl;
+                        #endif
+
+                        if(cnt_short_pulse >= short_samples_expected) {
+                            piping_detected = 1;    // piping is now detected
+                            cnt_short_pulse = 0;    // reset counter
+                        }
+                        else {
+                            long_pulse = 0;         // reset flag; restart the process; it wasn't piping
+                            red = 0;                // reset indicator LED
+                        }   
+                        cnt_short_pulse = 0;        // reset counter
+                    }
+
+
                 }
 
             }
 
-            // 2 - detecting the shorter pulses
-            // in a window of 5 seconds
-            // from different audio recordings, about 5 or 6 pulses occur within this time frame
-
+            // if piping is detected
+            // do something
             else {
 
-                // first, detect the f
-                if(mag_avg > detection_threshold) {
-                    tmr_p.start();      // start 5 second window
-                    cnt_short_pulse++;   // increment when f is detected
-                }
-                // when window elapses, determine whether it was the long piping pulse or not
-                if(tmr_p.elapsed_time().count()/1000 > 5000) {
-                    tmr_p.stop();
-                    tmr_p.reset();
-                    
-                    if(cnt_short_pulse >= 6) {
-                        piping_detected = 1;    // piping is now detected
-                        cnt_short_pulse = 0;    // reset counter
-                    }
-                    cnt_short_pulse = 0;    // reset counter
-                }
-
-
+                blue = !blue;
+                red = !red;
+                
             }
 
-        }
-
-        // if piping is detected
-        // do something
-        else {
-
-            blue = !blue;
-            red = !red;
-            
-        }
+        #endif
 
 
         // TODO:
-        // automatically determine loop time once at the start of the program
-        // something to disable the piping_detected flag (timer/manually)
-        // deal with following condition: detected long pulse, but no short pulse; reset
-
+        // something to disable the piping_detected flag (timer/manually) -- later
         
 
     }
@@ -325,3 +368,6 @@ uint32_t bit_reverse(uint32_t num, int numBits) {
     return reversed;
 
 }
+
+
+

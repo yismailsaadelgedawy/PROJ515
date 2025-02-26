@@ -4,11 +4,13 @@
 #include "SDcard.hpp"
 #include <string_view>
 
-#define SD_detect_pin PF_4
-#define fifo_depth 10
+#define SD_detect_pin PF_4          // may need to use this for robustness
+#define fifo_depth 10               // depth of both buffers
 
 DigitalIn SDmountCheck(SD_detect_pin);
 
+// FFT magnitude, and date and time buffers
+// WARNING: do NOT use std::string as a data type - crashes the OS (mutex not allowed in ISR context)
 CircularBuffer<int, fifo_depth> fifo_mag;
 CircularBuffer<char*, fifo_depth> fifo_time;
 
@@ -19,8 +21,10 @@ char* rx_time;          //
 int main()
 {
 
+    // dummy time data
     char* s = "Wednesday, 26 February 2025";
 
+    // dummy magnitude data
     int dummy_data = 0;
 
     // You should check if the buffer is full before pushing the data because a full buffer overwrites the data.
@@ -31,8 +35,6 @@ int main()
         fifo_mag.push(dummy_data++);    // store the magnitude
         fifo_time.push(s);              // store the date and time
     }
-
-
     
 
     // popping data off buffer

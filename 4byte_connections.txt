@@ -1,0 +1,23 @@
+STM32     ->     Pi
+-----------------------
+PA5 (SCK) -> GPIO11 (SCLK)
+PA6 (MISO)-> GPIO9  (MISO)
+PA7 (MOSI)-> GPIO10 (MOSI)
+PA4 (NSS) -> GPIO8  (CE0)
+GND       -> GND
+
+pinout in stm32cubeide
+pa5 -> SPI1_SCK
+pa6 -> SPI1_MISO
+pa7 -> SPI1_MOSI
+pa4 -> SPI1_NSS
+
+Connectivity -> SPI1
+Mode: Full Duplex Slave
+Data size: 8-bit
+NSS: Hardware Input
+Rest -> default
+
+Serial Prints
+PA2 → USART2_TX
+PA3 → USART2_RX

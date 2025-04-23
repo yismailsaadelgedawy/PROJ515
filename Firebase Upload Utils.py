@@ -1,6 +1,12 @@
 #use:   UserID:CO3Mde5N9qbJpS9TwJslvABpAOk2
 #       hiveID: kjiqHt0pbaIMvAUFArp9
 #       For Testing
+import datetime
+import pytz
+
+# Get the current time in BST (British Summer Time)
+uk_timezone = pytz.timezone('Europe/London')  # This will automatically handle BST/GMT switching
+current_time = datetime.datetime.now(uk_timezone)
 
 def update_hive_data(user_id, hive_id, temperature=None, activity=None, health=None, 
                     swarm_likelihood=None, additional_data=None):
@@ -27,6 +33,10 @@ def update_hive_data(user_id, hive_id, temperature=None, activity=None, health=N
         if temperature is not None:
             data['temperature'] = temperature
         
+        # Add activity to the main document if provided
+        if activity is not None:
+            data['activity'] = activity
+            
         if health is not None:
             data['health'] = health
             
@@ -51,21 +61,22 @@ def update_hive_data(user_id, hive_id, temperature=None, activity=None, health=N
         
         # If activity data is provided, add it to the activity_over_time array
         if activity is not None:
-            # Create the activity data point
+            # Use a client-side timestamp for the array
+            import datetime
+            current_time = datetime.datetime.now(uk_timezone)
+            
+            # Create the activity data point with client-side timestamp
             activity_data = {
-                'day': firestore.SERVER_TIMESTAMP,
+                'day': current_time,
                 'activity': activity
             }
-            
-            # Add activity to the main document
-            data['activity'] = activity
-            
+                
             # Add to the activity_over_time array using array_union
             hive_ref.update({
                 'activity_over_time': firestore.ArrayUnion([activity_data])
             })
         
-        print(f"Updated hive {hive_id} for user {user_id} with data: {data}")
+        #print(f"Updated hive {hive_id} for user {user_id} with data: {data}")
         return True
     
     except Exception as e:
@@ -176,9 +187,17 @@ def check_threshold_and_alert(user_id, hive_id, measurement_type, value, thresho
 ###############################################################
 ###############################################################
 
+import firebase_admin
+from firebase_admin import credentials, firestore
 import time
 import random  # for demo purposes
-from firebase_manager import update_hive_data, send_alert, check_threshold_and_alert
+#from firebase_manager import update_hive_data, send_alert, check_threshold_and_alert
+
+if not firebase_admin._apps:
+    cred = credentials.Certificate("serviceAccountKey.json")  # Ensure this file is present
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
 
 # Configuration
 USER_ID = "CO3Mde5N9qbJpS9TwJslvABpAOk2"  # Your Firebase user ID
@@ -199,3 +218,4 @@ def read_sensor_data(hive_id):
         'activity': 75 + random.uniform(-20, 15),     # Random activity level
         'health': max(50, min(95, 75 + random.uniform(-10, 10))),  # Health between 50-95%
         'swarm_likelihood': max(0, min(80, 20 + random.uniform(-10, 30)))  # Swarm likelihood 0-80%
+        }

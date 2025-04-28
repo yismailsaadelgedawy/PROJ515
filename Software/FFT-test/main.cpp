@@ -9,22 +9,27 @@
 // by YEG
 
 // general parameters
-#define test_frequency      1200            // a test frequency used to ensure FFT works as intended
-#define piping_frequency    1200            // the frequency of queen piping
-#define detection_threshold 1400            // the magnitude required to be classified as "ON" (100% volume monitor speakers)
-#define off_threshold       1000            // the magnitude required to be classified as "OFF" (100% volume monitor speakers)
+#define test_frequency      240            // a test frequency used to ensure FFT works as intended
+#define predator_frequency    240            // the frequency of queen piping
+#define detection_threshold 1000            // the magnitude required to be classified as "ON" (100% volume monitor speakers)
+#define off_threshold       800            // the magnitude required to be classified as "OFF" (100% volume monitor speakers)
 
 // IO
-AnalogIn mic(PA_3);             // mic/acc input
-DigitalOut samp_pin(PC_0);      // test output pin
+AnalogIn mic(PC_3);             // micR input
+DigitalOut samp_pin(PA_3);      // test output pin
 DigitalOut red(PB_14);          // red LED
 DigitalOut green(PB_0);         // green LED
 DigitalOut blue(PB_7);          // blue LED
 
+// SPI
+SPI_HandleTypeDef hspi4; 
+SPI spi(PE_14,PE_13,PE_12);  // mosi, miso, sclk
+DigitalOut cs(PE_11);  // cs
+
 // Timers
 Timer tmr;      // general timer
 Ticker t;       // sampling timer
-Timer tmr_p;    // timer used for piping
+Timer tmr_pred;    // timer used for predator detection
 
 // timing
 constexpr uint16_t fs = 8192;                           // sampling frequency
@@ -44,7 +49,7 @@ constexpr uint16_t N = 1<<9;    // ensures it is a power of 2
 
 constexpr double f_res = (1.0f)/(N * 1.0f/fs);                  // frequency resolution (currently it is 8Hz - good enough; saves memory)
 constexpr uint16_t k_test = test_frequency/(uint16_t)f_res;     // obtains the frequency bin, k, corresponding to test_frequency
-constexpr uint16_t k_p = piping_frequency/(uint16_t)f_res;      // obtains the frequency bin, k, corresponding to piping_frequency
+constexpr uint16_t k_pred = predator_frequency/(uint16_t)f_res;      // obtains the frequency bin, k, corresponding to piping_frequency
 
 
 constexpr complex<double> z3(0,-2*pi/N);    // -2*pi*j/N
@@ -60,20 +65,17 @@ bool avg = 1;                   // controls whether moving average is enabled or
 
 ///////////////////////////////////////////////////////////////////////////////////
 
-//////////////////// PIPING STUFF ////////////////////
+//////////////////// PREDATOR STUFF ////////////////////
 
 // piping counters
 uint8_t cnt_long_pulse;         // determines how long the "long piping pulse" is
-uint8_t cnt_short_pulse;        // counts number of shorter piping pulses
 // piping flags
-bool long_pulse;                // was a long pulse detected?
-bool piping_detected;           // was piping detected?
+bool pred_detected;           // was piping detected?
 // variables
 uint8_t long_samples_expected;
 constexpr uint8_t short_samples_expected = 6;
 // parameters
-constexpr uint16_t long_pulse_duration_ms = 900;
-constexpr uint16_t short_pulses_duration_ms = 5000;
+constexpr uint16_t long_pulse_duration_ms = 800;
 
 //////////////////////////////////////////////////////
 
@@ -89,12 +91,36 @@ constexpr uint16_t short_pulses_duration_ms = 5000;
 
 // functions
 uint32_t bit_reverse(uint32_t num, int numBits);    // bit scrambling algorithm
+static void spi_init();
+
+void Error_Handler(void);
 
 // ISRs
 void sampling_ISR();                                // sampling interrupt service routine
 
 
 int main() {
+
+    // setup spi
+    spi_init();
+
+    // test
+    uint8_t a = 102;
+    uint8_t b = 255;
+    uint8_t c = 37;
+    uint8_t d = 4;
+
+    uint8_t txBuf[4] = {a, b, c, d};
+    uint8_t rxBuf[4] = {0, 0, 0, 0};
+
+    while(1){
+
+    //continously calling SPI so mcu is always ready when pi talks
+    if (HAL_SPI_TransmitReceive(&hspi4, txBuf, rxBuf, 4, HAL_MAX_DELAY) == HAL_OK) printf("spi tx success\n");
+    else printf("spi tx failed\n");
+
+    }
+    
 
     // precompute twiddle factors - ONCE
     // optimises for speed
@@ -197,11 +223,11 @@ int main() {
         // polarity depends on mode remember; choose the output array accordingly
         if(!mode) {
             mag2 = mag1;            // old sample (n-1)
-            mag1 = abs(x_2[k_p]);   // new sample (n)
+            mag1 = abs(x_2[k_pred]);   // new sample (n)
         }
         else {
             mag2 = mag1;
-            mag1 = abs(x_1[k_p]);
+            mag1 = abs(x_1[k_pred]);
         }
 
         // calculation of loop time (end)
@@ -250,77 +276,37 @@ int main() {
 
             // if piping isn't detected
             // run the algorithm
-            if(!piping_detected) {
+            if(!pred_detected) {
             
                 // 1 - detecting the initial long pulse
                 // the pulse lasts about 1sec
                 // loop time is measured to be 87ms 
                 // so 1sec of a continous f, results in 11.5 samples
                 
-                if(!long_pulse) {
+                
 
-                    // first, detect the f
-                    if(mag_avg > detection_threshold) {
-                        tmr_p.start();      // start 1 second window
-                        cnt_long_pulse++;   // increment when f is detected
+                // first, detect the f
+                if(mag_avg > detection_threshold) {
+                    tmr_pred.start();      // start 1 second window
+                    cnt_long_pulse++;   // increment when f is detected
+                }
+                // when window elapses, determine whether it was the long piping pulse or not
+                if(tmr_pred.elapsed_time().count()/1000 > long_pulse_duration_ms) {
+                    tmr_pred.stop();
+                    tmr_pred.reset();
+
+                    #ifdef PIPING_DEBUG
+                        std::cout << "long: " << (int)cnt_long_pulse << std::endl;
+                    #endif
+
+                    if(cnt_long_pulse >= long_samples_expected) {
+                        cnt_long_pulse = 0; // reset counter
+                        pred_detected = 1;
                     }
-                    // when window elapses, determine whether it was the long piping pulse or not
-                    if(tmr_p.elapsed_time().count()/1000 > long_pulse_duration_ms) {
-                        tmr_p.stop();
-                        tmr_p.reset();
-
-                        #ifdef PIPING_DEBUG
-                            std::cout << "long: " << (int)cnt_long_pulse << std::endl;
-                        #endif
-
-                        if(cnt_long_pulse >= long_samples_expected) {
-                            long_pulse = 1;     // long pulse has been detected
-                            cnt_long_pulse = 0; // reset counter
-                            red = 1;
-                        }
-                        cnt_long_pulse = 0;     // reset counter
-                    }
-
+                    cnt_long_pulse = 0;     // reset counter
                 }
 
-                // 2 - detecting the shorter pulses
-                // in a window of 5 seconds
-                // from different audio recordings, about 5 or 6 pulses occur within this time frame
-
-                else {
-
-                    tmr_p.start();      // start 5 second window straight away
-                    avg = 0;            // disable averaging; faster response; more appropriate for the short pulses we are looking for
-
-                    // then, detect the f
-                    // pulse detection
-                    // rising edge detector (think Verilog)
-                    if(mag1 > detection_threshold && mag2 < off_threshold) cnt_short_pulse++;
-                    
-                    // when window elapses, determine whether it was the long piping pulse or not
-                    if(tmr_p.elapsed_time().count()/1000 > short_pulses_duration_ms) {
-                        tmr_p.stop();
-                        tmr_p.reset();
-
-                        avg = 1;    // re-enable averaging
-
-                        #ifdef PIPING_DEBUG
-                            std::cout << "short: " << (int)cnt_short_pulse << std::endl;
-                        #endif
-
-                        if(cnt_short_pulse >= short_samples_expected) {
-                            piping_detected = 1;    // piping is now detected
-                            cnt_short_pulse = 0;    // reset counter
-                        }
-                        else {
-                            long_pulse = 0;         // reset flag; restart the process; it wasn't piping
-                            red = 0;                // reset indicator LED
-                        }   
-                        cnt_short_pulse = 0;        // reset counter
-                    }
-
-
-                }
+                
 
             }
 
@@ -369,5 +355,34 @@ uint32_t bit_reverse(uint32_t num, int numBits) {
 
 }
 
+
+static void spi_init() {
+
+    hspi4.Instance = SPI4;
+    hspi4.Init.Mode = SPI_MODE_SLAVE;
+    hspi4.Init.Direction = SPI_DIRECTION_2LINES;
+    hspi4.Init.DataSize = SPI_DATASIZE_8BIT;
+    hspi4.Init.CLKPolarity = SPI_POLARITY_LOW;
+    hspi4.Init.CLKPhase = SPI_PHASE_1EDGE;
+    hspi4.Init.NSS = SPI_NSS_HARD_INPUT;
+    hspi4.Init.FirstBit = SPI_FIRSTBIT_MSB;
+    hspi4.Init.TIMode = SPI_TIMODE_DISABLE;
+    hspi4.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+    hspi4.Init.CRCPolynomial = 10;
+    if (HAL_SPI_Init(&hspi4) != HAL_OK) Error_Handler();
+
+}
+
+
+/* Error Handler */
+void Error_Handler(void)
+{
+
+    printf("ERROR: SPI ERROR HANDLER\n");
+    while (1)
+    {
+
+    }
+}
 
 

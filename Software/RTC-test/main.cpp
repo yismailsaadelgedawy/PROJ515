@@ -21,9 +21,11 @@ constexpr uint8_t smm = 60;
 
 // push button pin definitions
 // buttons A and C on the MSB for now
-DigitalIn up_btn(PG_0);
-DigitalIn down_btn(PG_2);
-DigitalIn confirm_btn(PC_13);    // active high
+DigitalIn up_btn(PF_2);
+DigitalIn down_btn(PF_1);
+DigitalIn confirm_btn(PF_0);    // active high
+
+DigitalOut bkl(PG_0);
 
 // timers
 Timer btn_tmr;
@@ -430,6 +432,9 @@ void lcd_write(uint16_t num) {
 }
 
 void lcd_init() {
+
+
+    bkl = 1;
 
     // GPIOD clock enable
     RCC->AHB1ENR |= 1<<3; 

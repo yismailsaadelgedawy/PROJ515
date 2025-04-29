@@ -99,14 +99,14 @@ uint32_t bit_reverse(uint32_t num, int numBits);    // bit scrambling algorithm
 
 // ISRs
 void sampling_ISR();                                // sampling interrupt service routine
-void trigger_filter_ISR();                          // trigger filter interrupt service routine from PCB
+void trigger_filter_hornet_ISR();                          // trigger filter interrupt service routine from PCB
 
 
 int main() {
 
     #ifdef FFT_TIMING
         // setup the trigger ISR
-        hornet_pin.rise(trigger_filter_ISR);
+        hornet_pin.rise(trigger_filter_hornet_ISR);
         // wait for trigger pin
         sleep();
     #endif
@@ -129,7 +129,7 @@ int main() {
                 tmr_fft.stop();                         // stop timer
                 tmr_fft.reset();                        // reset timer
                 t.detach();                             // disable fft
-                hornet_pin.rise(trigger_filter_ISR);    // re-enable the trigger interrupt
+                hornet_pin.rise(trigger_filter_hornet_ISR);    // re-enable the trigger interrupt
                 sleep();                                // wait for trigger...
                 tmr_fft.start();                        // start timer again
                 
@@ -344,7 +344,7 @@ void sampling_ISR() {
 
 }
 
-void trigger_filter_ISR() {
+void trigger_filter_hornet_ISR() {
 
     hornet_pin.rise(NULL);  // detach to avoid queueing
     // red = 1;             // use this to debug

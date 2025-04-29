@@ -9,10 +9,10 @@
 // by YEG
 
 // general parameters
-#define test_frequency      1200            // a test frequency used to ensure FFT works as intended
-#define piping_frequency    1200            // the frequency of queen piping
-#define detection_threshold 1400            // the magnitude required to be classified as "ON" (100% volume monitor speakers)
-#define off_threshold       1000            // the magnitude required to be classified as "OFF" (100% volume monitor speakers)
+#define test_frequency          400             // a test frequency used to ensure FFT works as intended
+#define piping_frequency        400             // the frequency of queen piping
+#define detection_threshold     80              // the magnitude required to be classified as "ON" (100% volume monitor speakers)
+#define off_threshold           50              // the magnitude required to be classified as "OFF" (100% volume monitor speakers)
 
 // IO
 AnalogIn mic(PA_3);             // mic/acc input
@@ -21,10 +21,14 @@ DigitalOut red(PB_14);          // red LED
 DigitalOut green(PB_0);         // green LED
 DigitalOut blue(PB_7);          // blue LED
 
+// Int pins
+InterruptIn piping_pin(PA_5);
+
 // Timers
-Timer tmr;      // general timer
-Ticker t;       // sampling timer
-Timer tmr_p;    // timer used for piping
+Timer tmr;              // general timer
+Ticker t;               // sampling timer
+Timer tmr_p;            // timer used for piping
+Timer tmr_fft2;         // tuner timer used to run fft for a while after trigger
 
 // timing
 constexpr uint16_t fs = 8192;                           // sampling frequency
@@ -58,6 +62,8 @@ complex<float> mul;             // holds the result of the W*B product; optimise
 uint16_t mag1,mag2,mag_avg;     // 2 magnitude samples (n and n-1), and an average of them
 bool avg = 1;                   // controls whether moving average is enabled or not; enabled by default
 
+constexpr uint32_t fft_time_us = 5000000;   // sets how long the FFT to run for after the trigger (5 seconds by default)
+
 ///////////////////////////////////////////////////////////////////////////////////
 
 //////////////////// PIPING STUFF ////////////////////
@@ -72,7 +78,7 @@ bool piping_detected;           // was piping detected?
 uint8_t long_samples_expected;
 constexpr uint8_t short_samples_expected = 6;
 // parameters
-constexpr uint16_t long_pulse_duration_ms = 900;
+constexpr uint16_t long_pulse_duration_ms = 800;
 constexpr uint16_t short_pulses_duration_ms = 5000;
 
 //////////////////////////////////////////////////////
@@ -83,6 +89,7 @@ constexpr uint16_t short_pulses_duration_ms = 5000;
 // #define TUNING           // tuning prints on/off
 #define PIPING           // piping algorithm on/off
 #define PIPING_DEBUG     // piping debug prints on/off
+#define FFT_TIMING           // timed FFT on/off
 
 /////////////////////////////////
 
@@ -91,10 +98,18 @@ constexpr uint16_t short_pulses_duration_ms = 5000;
 uint32_t bit_reverse(uint32_t num, int numBits);    // bit scrambling algorithm
 
 // ISRs
-void sampling_ISR();                                // sampling interrupt service routine
+void sampling_ISR();                                        // sampling interrupt service routine
+void trigger_filter_piping_ISR();                           // trigger filter interrupt service routine from PCB
 
 
 int main() {
+
+    #ifdef FFT_TIMING
+        // setup the trigger ISR
+        piping_pin.rise(trigger_filter_piping_ISR);
+        // wait for trigger pin
+        sleep();
+    #endif
 
     // precompute twiddle factors - ONCE
     // optimises for speed
@@ -104,6 +119,22 @@ int main() {
     }
 
     while(1) {
+
+        #ifdef FFT_TIMING
+            // after triggering, run FFT for a bit
+            tmr_fft2.start();
+
+            if(tmr_fft2.elapsed_time().count() > fft_time_us) {
+
+                tmr_fft2.stop();                                // stop timer
+                tmr_fft2.reset();                               // reset timer
+                t.detach();                                     // disable fft
+                piping_pin.rise(trigger_filter_piping_ISR);     // re-enable the trigger interrupt
+                sleep();                                        // wait for trigger...
+                tmr_fft2.start();                               // start timer again
+                
+            }
+        #endif
         
         t.attach(sampling_ISR, Ts);     // setup sampling ISR
         sleep();                        // wait for ISR
@@ -216,6 +247,11 @@ int main() {
             // calculate the number of expected long piping samples
             // within a 1sec time window; function of loop time!
             long_samples_expected = long_pulse_duration_ms/loop_time_ms;
+
+            #ifdef PIPING_DEBUG
+                std::cout << "long pulses expected: " << (int)long_samples_expected << std::endl;
+                std::cout << "short pulses expected: " << (int)short_samples_expected << std::endl;
+            #endif
         }
 
         // --- DO NOT PUT CODE HERE --- //
@@ -350,6 +386,11 @@ void sampling_ISR() {
 
     samp_pin = !samp_pin;   // toggle test pin (for probing)
 
+}
+
+void trigger_filter_piping_ISR() {
+
+    piping_pin.rise(NULL);  // detach to avoid queueing
 }
 
 

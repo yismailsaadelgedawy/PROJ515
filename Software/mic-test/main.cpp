@@ -77,7 +77,7 @@ uint8_t cnt_long_pulse;         // determines how long the "long predator pulse"
 bool pred_detected;             // was a predator detected?
 // variables
 uint8_t long_samples_expected;
-constexpr uint8_t short_samples_expected = 6;
+// constexpr uint8_t short_samples_expected = 6;
 // parameters
 constexpr uint16_t long_pulse_duration_ms = 800;
 

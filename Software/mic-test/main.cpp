@@ -9,10 +9,10 @@
 // by YEG
 
 // general parameters
-#define test_frequency      240            // a test frequency used to ensure FFT works as intended
-#define predator_frequency    240            // the frequency of queen piping
-#define detection_threshold 1000            // the magnitude required to be classified as "ON" (100% volume monitor speakers)
-#define off_threshold       800            // the magnitude required to be classified as "OFF" (100% volume monitor speakers)
+#define test_frequency          240             // a test frequency used to ensure FFT works as intended
+#define predator_frequency      240             // the frequency of predator
+#define detection_threshold     1000            // the magnitude required to be classified as "ON" (100% volume monitor speakers)
+#define off_threshold           800             // the magnitude required to be classified as "OFF" (100% volume monitor speakers)
 
 // IO
 AnalogIn mic(PC_3);             // micR input
@@ -21,15 +21,16 @@ DigitalOut red(PB_14);          // red LED
 DigitalOut green(PB_0);         // green LED
 DigitalOut blue(PB_7);          // blue LED
 
+// Int pins
+InterruptIn hornet_pin(PA_6);
+
 // SPI
-SPI_HandleTypeDef hspi4; 
-SPI spi(PE_14,PE_13,PE_12);  // mosi, miso, sclk
-DigitalOut cs(PE_11);  // cs
 
 // Timers
-Timer tmr;      // general timer
-Ticker t;       // sampling timer
-Timer tmr_pred;    // timer used for predator detection
+Timer tmr;          // general timer
+Ticker t;           // sampling timer
+Timer tmr_pred;     // timer used for predator detection
+Timer tmr_fft;      // tuner timer used to run fft for a while after trigger
 
 // timing
 constexpr uint16_t fs = 8192;                           // sampling frequency
@@ -47,9 +48,9 @@ using std::pow;
 constexpr float pi = 3.14159;   // pi :)
 constexpr uint16_t N = 1<<9;    // ensures it is a power of 2
 
-constexpr double f_res = (1.0f)/(N * 1.0f/fs);                  // frequency resolution (currently it is 8Hz - good enough; saves memory)
-constexpr uint16_t k_test = test_frequency/(uint16_t)f_res;     // obtains the frequency bin, k, corresponding to test_frequency
-constexpr uint16_t k_pred = predator_frequency/(uint16_t)f_res;      // obtains the frequency bin, k, corresponding to piping_frequency
+constexpr double f_res = (1.0f)/(N * 1.0f/fs);                          // frequency resolution (currently it is 8Hz - good enough; saves memory)
+constexpr uint16_t k_test = test_frequency/(uint16_t)f_res;             // obtains the frequency bin, k, corresponding to test_frequency
+constexpr uint16_t k_pred = predator_frequency/(uint16_t)f_res;         // obtains the frequency bin, k, corresponding to piping_frequency
 
 
 constexpr complex<double> z3(0,-2*pi/N);    // -2*pi*j/N
@@ -63,14 +64,17 @@ complex<float> mul;             // holds the result of the W*B product; optimise
 uint16_t mag1,mag2,mag_avg;     // 2 magnitude samples (n and n-1), and an average of them
 bool avg = 1;                   // controls whether moving average is enabled or not; enabled by default
 
+constexpr uint32_t fft_time_us = 5000000;   // sets how long the FFT to run for after the trigger (5 seconds by default)
+
+
 ///////////////////////////////////////////////////////////////////////////////////
 
 //////////////////// PREDATOR STUFF ////////////////////
 
-// piping counters
-uint8_t cnt_long_pulse;         // determines how long the "long piping pulse" is
-// piping flags
-bool pred_detected;           // was piping detected?
+// predator counters
+uint8_t cnt_long_pulse;         // determines how long the "long predator pulse" is
+// predator flags
+bool pred_detected;             // was a predator detected?
 // variables
 uint8_t long_samples_expected;
 constexpr uint8_t short_samples_expected = 6;
@@ -81,46 +85,31 @@ constexpr uint16_t long_pulse_duration_ms = 800;
 
 ////////// DEBUG STUFF //////////
 
-// #define DEBUG            // debug prints on/off
-// #define TUNING           // tuning prints on/off
-#define PIPING           // piping algorithm on/off
-#define PIPING_DEBUG     // piping debug prints on/off
+// #define DEBUG                // debug prints on/off
+// #define TUNING               // tuning prints on/off
+#define PREDATOR             // predator algorithm on/off
+#define PREDATOR_DEBUG       // predator debug prints on/off
+#define FFT_TIMING           // timed FFT on/off
 
 /////////////////////////////////
 
 
 // functions
 uint32_t bit_reverse(uint32_t num, int numBits);    // bit scrambling algorithm
-static void spi_init();
-
-void Error_Handler(void);
 
 // ISRs
 void sampling_ISR();                                // sampling interrupt service routine
+void trigger_filter_ISR();                          // trigger filter interrupt service routine from PCB
 
 
 int main() {
 
-    // setup spi
-    spi_init();
-
-    // test
-    uint8_t a = 102;
-    uint8_t b = 255;
-    uint8_t c = 37;
-    uint8_t d = 4;
-
-    uint8_t txBuf[4] = {a, b, c, d};
-    uint8_t rxBuf[4] = {0, 0, 0, 0};
-
-    while(1){
-
-    //continously calling SPI so mcu is always ready when pi talks
-    if (HAL_SPI_TransmitReceive(&hspi4, txBuf, rxBuf, 4, HAL_MAX_DELAY) == HAL_OK) printf("spi tx success\n");
-    else printf("spi tx failed\n");
-
-    }
-    
+    #ifdef FFT_TIMING
+        // setup the trigger ISR
+        hornet_pin.rise(trigger_filter_ISR);
+        // wait for trigger pin
+        sleep();
+    #endif
 
     // precompute twiddle factors - ONCE
     // optimises for speed
@@ -130,6 +119,23 @@ int main() {
     }
 
     while(1) {
+
+        #ifdef FFT_TIMING
+            // after triggering, run FFT for a bit
+            tmr_fft.start();
+
+            if(tmr_fft.elapsed_time().count() > fft_time_us) {
+
+                tmr_fft.stop();                         // stop timer
+                tmr_fft.reset();                        // reset timer
+                t.detach();                             // disable fft
+                hornet_pin.rise(trigger_filter_ISR);    // re-enable the trigger interrupt
+                sleep();                                // wait for trigger...
+                tmr_fft.start();                        // start timer again
+                
+            }
+        #endif
+
         
         t.attach(sampling_ISR, Ts);     // setup sampling ISR
         sleep();                        // wait for ISR
@@ -239,7 +245,7 @@ int main() {
             tmr.reset();
             loop_time_state = 2;
 
-            // calculate the number of expected long piping samples
+            // calculate the number of expected long predator samples
             // within a 1sec time window; function of loop time!
             long_samples_expected = long_pulse_duration_ms/loop_time_ms;
         }
@@ -271,10 +277,10 @@ int main() {
         #endif
 
 
-        // piping detection
-        #ifdef PIPING
+        // predator detection
+        #ifdef PREDATOR
 
-            // if piping isn't detected
+            // if predator isn't detected
             // run the algorithm
             if(!pred_detected) {
             
@@ -290,12 +296,12 @@ int main() {
                     tmr_pred.start();      // start 1 second window
                     cnt_long_pulse++;   // increment when f is detected
                 }
-                // when window elapses, determine whether it was the long piping pulse or not
+                // when window elapses, determine whether it was the long predator pulse or not
                 if(tmr_pred.elapsed_time().count()/1000 > long_pulse_duration_ms) {
                     tmr_pred.stop();
                     tmr_pred.reset();
 
-                    #ifdef PIPING_DEBUG
+                    #ifdef PREDATOR_DEBUG
                         std::cout << "long: " << (int)cnt_long_pulse << std::endl;
                     #endif
 
@@ -310,7 +316,7 @@ int main() {
 
             }
 
-            // if piping is detected
+            // if predator is detected
             // do something
             else {
 
@@ -323,7 +329,7 @@ int main() {
 
 
         // TODO:
-        // something to disable the piping_detected flag (timer/manually) -- later
+        // something to disable the pred_detected flag (timer/manually) -- later
         
 
     }
@@ -335,6 +341,13 @@ int main() {
 void sampling_ISR() {
 
     samp_pin = !samp_pin;   // toggle test pin (for probing)
+
+}
+
+void trigger_filter_ISR() {
+
+    hornet_pin.rise(NULL);  // detach to avoid queueing
+    // red = 1;             // use this to debug
 
 }
 
@@ -356,33 +369,6 @@ uint32_t bit_reverse(uint32_t num, int numBits) {
 }
 
 
-static void spi_init() {
 
-    hspi4.Instance = SPI4;
-    hspi4.Init.Mode = SPI_MODE_SLAVE;
-    hspi4.Init.Direction = SPI_DIRECTION_2LINES;
-    hspi4.Init.DataSize = SPI_DATASIZE_8BIT;
-    hspi4.Init.CLKPolarity = SPI_POLARITY_LOW;
-    hspi4.Init.CLKPhase = SPI_PHASE_1EDGE;
-    hspi4.Init.NSS = SPI_NSS_HARD_INPUT;
-    hspi4.Init.FirstBit = SPI_FIRSTBIT_MSB;
-    hspi4.Init.TIMode = SPI_TIMODE_DISABLE;
-    hspi4.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-    hspi4.Init.CRCPolynomial = 10;
-    if (HAL_SPI_Init(&hspi4) != HAL_OK) Error_Handler();
-
-}
-
-
-/* Error Handler */
-void Error_Handler(void)
-{
-
-    printf("ERROR: SPI ERROR HANDLER\n");
-    while (1)
-    {
-
-    }
-}
 
 

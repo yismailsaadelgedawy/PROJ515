@@ -36,6 +36,15 @@ BusOut addr(addr0, addr1, addr2, addr3);                    // LSB -> MSB
 AnalogIn temp_sense(PF_5);
 // DigitalOut maint_LED(PE_3);
 
+// Setup SPI Slave: mosi, miso, sclk, ssel
+// PI SPI MUST be a master
+// so PI must send dummy data to generate the clock
+// so that the MCU can send its data
+SPISlave spi4_slave(PE_14, PE_13, PE_12, PE_11); // MOSI, MISO, SCLK, CS
+
+// SPI handler
+SPI_HandleTypeDef hspi4;
+
 // Int pins
 InterruptIn piping_pin(PA_5);
 InterruptIn hornet_pin(PA_6);
@@ -156,6 +165,7 @@ uint8_t sum;
 Thread t1;              // accelerometer thread
 Thread t2;              // microphone thread
 Thread t3;              // temperature thread
+Thread t4;              // SPI thread
 
 // Mutexes
 Mutex fft_mtx;          // used for FFTs
@@ -164,11 +174,14 @@ Mutex fft_mtx;          // used for FFTs
 void acc_thread();
 void mic_thread();
 void temp_thread();
+void SPI_thread();
 
 
 // functions
 uint32_t bit_reverse(uint32_t num, int numBits);            // bit scrambling algorithm
 bool sense(int sensor_number);                              // temperature sensing
+void spi4_init();
+void spi4_write(uint8_t d1, uint8_t d2, uint8_t d3, uint8_t d4);
 
 // ISRs
 void sampling_ISR();                                        // sampling interrupt service routine
@@ -191,6 +204,7 @@ int main()
 	t1.start(acc_thread);  
 	t2.start(mic_thread);  
     t3.start(temp_thread);
+    t4.start(SPI_thread);
 
     // waits for threads to finish
 	// which they won't...
@@ -776,6 +790,21 @@ void temp_thread() {
     
 }
 
+// t4
+void SPI_thread() {
+
+    spi4_init();
+
+    while (true) {
+
+        // continously calling SPI so mcu is always ready when pi talks
+        spi4_write(24, 100, 0x03, 0);
+       
+            
+    }
+
+}
+
 
 /// ISRs ///
 
@@ -869,4 +898,29 @@ bool sense(int sensor_number) {
     
 
     return inBroodArea;
+}
+
+void spi4_init(void) {
+
+    hspi4.Instance = SPI4;
+    hspi4.Init.Mode = SPI_MODE_SLAVE;
+    hspi4.Init.Direction = SPI_DIRECTION_2LINES;
+    hspi4.Init.DataSize = SPI_DATASIZE_8BIT;
+    hspi4.Init.CLKPolarity = SPI_POLARITY_LOW;
+    hspi4.Init.CLKPhase = SPI_PHASE_1EDGE;
+    hspi4.Init.NSS = SPI_NSS_HARD_INPUT;
+    hspi4.Init.FirstBit = SPI_FIRSTBIT_MSB;
+    hspi4.Init.TIMode = SPI_TIMODE_DISABLE;
+    hspi4.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+    hspi4.Init.CRCPolynomial = 10;
+    if (HAL_SPI_Init(&hspi4) != HAL_OK) printf("ERROR\n");
+}
+
+void spi4_write(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
+
+    uint8_t txBuf[5] = {a, b, c, d};
+    uint8_t rxBuf[5] = {0, 0, 0, 0};
+
+    if (HAL_SPI_TransmitReceive(&hspi4, txBuf, rxBuf, 4, HAL_MAX_DELAY) != HAL_OK) printf("SPI TRANSFER ERROR\n");
+
 }

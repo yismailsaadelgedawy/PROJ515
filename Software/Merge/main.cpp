@@ -34,7 +34,7 @@ DigitalOut green(PB_0);                                     // green LED
 DigitalOut blue(PB_7);                                      // blue LED
 BusOut addr(addr0, addr1, addr2, addr3);                    // LSB -> MSB
 AnalogIn temp_sense(PF_5);
-DigitalOut maint_LED(PE_3);
+// DigitalOut maint_LED(PE_3);
 
 // Int pins
 InterruptIn piping_pin(PA_5);
@@ -174,16 +174,16 @@ bool sense(int sensor_number);                              // temperature sensi
 void sampling_ISR();                                        // sampling interrupt service routine
 void trigger_filter_piping_ISR();                           // trigger filter interrupt service routine from PCB
 void trigger_filter_hornet_ISR();                           // trigger filter interrupt service routine from PCB
-void maint_on_ISR();
-void maint_off_ISR();
+// void maint_on_ISR();
+// void maint_off_ISR();
 
 // main() runs in its own thread in the OS
 int main()
 {
 
     // setup maintenance isrs
-    maint_pin.rise(maint_on_ISR);
-    maint_pin.fall(maint_off_ISR);
+    // maint_pin.rise(maint_on_ISR);
+    // maint_pin.fall(maint_off_ISR);
 
     // main thread runs first
 
@@ -802,13 +802,13 @@ void trigger_filter_hornet_ISR() {
 
 }
 
-void maint_on_ISR() {
-    maint_LED = 1;
-}
+// void maint_on_ISR() {
+//     maint_LED = 1;
+// }
 
-void maint_off_ISR() {
-    maint_LED = 0;
-}
+// void maint_off_ISR() {
+//     maint_LED = 0;
+// }
 
 /// FUNCTIONS ///
 

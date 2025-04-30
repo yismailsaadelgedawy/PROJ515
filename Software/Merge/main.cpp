@@ -11,8 +11,8 @@
 #define piping_detection_threshold          80                      // the magnitude required to be classified as "ON" (100% volume monitor speakers)
 #define piping_off_threshold                50                      // the magnitude required to be classified as "OFF" (100% volume monitor speakers)
 #define predator_frequency                  240                     // the frequency of predator
-#define predator_detection_threshold        1000                    // the magnitude required to be classified as "ON" (100% volume monitor speakers)
-#define predator_off_threshold              800                     // the magnitude required to be classified as "OFF" (100% volume monitor speakers)
+#define predator_detection_threshold        800                    // the magnitude required to be classified as "ON" (100% volume monitor speakers)
+#define predator_off_threshold              600                     // the magnitude required to be classified as "OFF" (100% volume monitor speakers)
 
 // Temperature parameters
 #define samples                             4                       // number of samples for moving average
@@ -28,16 +28,18 @@
 // IO
 AnalogIn acc(PA_3);                                         // acc input
 AnalogIn mic(PC_3);                                         // micR input
-DigitalOut samp_pin(NC);                                    // test output pin
+// DigitalOut samp_pin(NC);                                    // test output pin
 DigitalOut red(PB_14);                                      // red LED
 DigitalOut green(PB_0);                                     // green LED
 DigitalOut blue(PB_7);                                      // blue LED
 BusOut addr(addr0, addr1, addr2, addr3);                    // LSB -> MSB
 AnalogIn temp_sense(PF_5);
+DigitalOut maint_LED(PE_3);
 
 // Int pins
 InterruptIn piping_pin(PA_5);
 InterruptIn hornet_pin(PA_6);
+InterruptIn maint_pin(PF_13);
 
 // Timers
 Timer tmr;              // general timer
@@ -67,7 +69,7 @@ constexpr uint16_t N = 1<<9;    // ensures it is a power of 2
 constexpr double f_res = (1.0f)/(N * 1.0f/fs);                          // frequency resolution (currently it is 8Hz - good enough; saves memory)
 constexpr uint16_t k_test = test_frequency/(uint16_t)f_res;             // obtains the frequency bin, k, corresponding to test_frequency
 constexpr uint16_t k_p = piping_frequency/(uint16_t)f_res;              // obtains the frequency bin, k, corresponding to piping_frequency
-constexpr uint16_t k_pred = predator_frequency/(uint16_t)f_res;         // obtains the frequency bin, k, corresponding to piping_frequency
+constexpr uint16_t k_pred = predator_frequency/(uint16_t)f_res;         // obtains the frequency bin, k, corresponding to predator_frequency
 
 
 constexpr complex<double> z3(0,-2*pi/N);    // -2*pi*j/N
@@ -172,10 +174,16 @@ bool sense(int sensor_number);                              // temperature sensi
 void sampling_ISR();                                        // sampling interrupt service routine
 void trigger_filter_piping_ISR();                           // trigger filter interrupt service routine from PCB
 void trigger_filter_hornet_ISR();                           // trigger filter interrupt service routine from PCB
+void maint_on_ISR();
+void maint_off_ISR();
 
 // main() runs in its own thread in the OS
 int main()
 {
+
+    // setup maintenance isrs
+    maint_pin.rise(maint_on_ISR);
+    maint_pin.fall(maint_off_ISR);
 
     // main thread runs first
 
@@ -229,6 +237,7 @@ void acc_thread() {
                 t.detach();                                         // disable fft
                 piping_pin.rise(trigger_filter_piping_ISR);         // re-enable the trigger interrupt
                 fft_mtx.unlock();                                   // exit critical section; THREAD END
+                ThisThread::flags_clear(piping_trigger);          // clear flag
                 ThisThread::flags_wait_all(piping_trigger);         // waits for flag from the piping ISR
                 ThisThread::flags_clear(piping_trigger);            // clear flag
                 fft_mtx.lock();                                     // enter critical section; THREAD START 2
@@ -244,7 +253,7 @@ void acc_thread() {
 
         // start reading values...
         for(int n=0; n<N; n++) {
-            x[n] = (mic.read() - 0.5) * 100.0f;     // 0.5 to remove DC offset; scaled to make numbers nicer to work with
+            x[n] = (acc.read() - 0.5) * 100.0f;     // 0.5 to remove DC offset; scaled to make numbers nicer to work with
             ThisThread::flags_wait_all(samp);       // waits for flag from the piping ISR
             ThisThread::flags_clear(samp);          // clear flag
         }
@@ -325,7 +334,7 @@ void acc_thread() {
         ///////////////////////////////////////////////////////////////
 
         // print out test frequency
-        #ifdef DEBUG
+        #ifdef DEBUG_P
             if(!mode) std::cout << test_frequency << " Hz: " << abs(x_2[k_test]) << std::endl;
             else std::cout << test_frequency << " Hz: " << abs(x_1[k_test]) << std::endl;
         #endif
@@ -520,6 +529,7 @@ void mic_thread() {
                 t.detach();                                         // disable fft
                 hornet_pin.rise(trigger_filter_hornet_ISR);         // re-enable the trigger interrupt
                 fft_mtx.unlock();                                   // exit critical section; THREAD END
+                ThisThread::flags_clear(predator_trigger);          // clear flag
                 ThisThread::flags_wait_all(predator_trigger);       // waits for flag from the predator ISR
                 ThisThread::flags_clear(predator_trigger);          // clear flag
                 fft_mtx.lock();                                     // enter critical section; THREAD START 2
@@ -528,15 +538,17 @@ void mic_thread() {
             }
         #endif
 
+        // std::cout << "running" << std::endl;
         
         t.attach(sampling_ISR, Ts);                         // setup sampling ISR
-        ThisThread::flags_wait_all(predator_trigger);       // waits for flag from the predator ISR
-        ThisThread::flags_clear(predator_trigger);          // clear flag
+        ThisThread::flags_wait_all(samp);       // waits for flag from sampling ISR
+        ThisThread::flags_clear(samp);          // clear flag
 
         // start reading values...
         for(int n=0; n<N; n++) {
             x[n] = (mic.read() - 0.5) * 100.0f;     // 0.5 to remove DC offset; scaled to make numbers nicer to work with
-            sleep();                                // will only wake up by sampling ISR
+            ThisThread::flags_wait_all(samp);       // waits for flag from sampling ISR
+            ThisThread::flags_clear(samp);          // clear flag
         }
 
         t.detach(); // stop reading
@@ -614,7 +626,7 @@ void mic_thread() {
         ///////////////////////////////////////////////////////////////
 
         // print out test frequency
-        #ifdef DEBUG
+        #ifdef DEBUG_PRED
             if(!mode) std::cout << test_frequency << " Hz: " << abs(x_2[k_test]) << std::endl;
             else std::cout << test_frequency << " Hz: " << abs(x_1[k_test]) << std::endl;
         #endif
@@ -661,12 +673,14 @@ void mic_thread() {
         
         // simple test for tuning
         // to determine predator_detection_threshold
-        #ifdef TUNING
-            if(mag_avg > predator_detection_threshold) {
-                green = 1;
-                std::cout << mag_avg << std::endl;
-            }
-            else green = 0;
+        #ifdef TUNING_PRED
+            // if(mag_avg > predator_detection_threshold) {
+            //     green = 1;
+            //     std::cout << mag_avg << std::endl;
+            // }
+            // else green = 0;
+
+            std::cout << mag_avg << std::endl;
         #endif
 
 
@@ -755,7 +769,7 @@ void temp_thread() {
         // do something if number is small
         
 
-        ThisThread::sleep_for(1s);    // wait a bit
+        ThisThread::sleep_for(sense_interval);    // wait a bit
 
     }
 
@@ -768,7 +782,7 @@ void temp_thread() {
 // sampling ISR
 void sampling_ISR() {
 
-    samp_pin = !samp_pin;   // toggle test pin (for probing)
+    // samp_pin = !samp_pin;   // toggle test pin (for probing)
     t1.flags_set(samp); // sends flag to start fft to threads, t1 and t2
     t2.flags_set(samp); //
 
@@ -786,6 +800,14 @@ void trigger_filter_hornet_ISR() {
     hornet_pin.rise(NULL);  // detach to avoid queueing
     t2.flags_set(predator_trigger); // sends flag to mic thread, t2
 
+}
+
+void maint_on_ISR() {
+    maint_LED = 1;
+}
+
+void maint_off_ISR() {
+    maint_LED = 0;
 }
 
 /// FUNCTIONS ///

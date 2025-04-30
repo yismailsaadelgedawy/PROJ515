@@ -11,8 +11,8 @@
 // general parameters
 #define test_frequency          240             // a test frequency used to ensure FFT works as intended
 #define predator_frequency      240             // the frequency of predator
-#define detection_threshold     1000            // the magnitude required to be classified as "ON" (100% volume monitor speakers)
-#define off_threshold           800             // the magnitude required to be classified as "OFF" (100% volume monitor speakers)
+#define detection_threshold     800            // the magnitude required to be classified as "ON" (100% volume monitor speakers)
+#define off_threshold           600             // the magnitude required to be classified as "OFF" (100% volume monitor speakers)
 
 // IO
 AnalogIn mic(PC_3);             // micR input
@@ -79,17 +79,17 @@ bool pred_detected;             // was a predator detected?
 uint8_t long_samples_expected;
 // constexpr uint8_t short_samples_expected = 6;
 // parameters
-constexpr uint16_t long_pulse_duration_ms = 800;
+constexpr uint16_t long_pulse_duration_ms = 600;
 
 //////////////////////////////////////////////////////
 
 ////////// DEBUG STUFF //////////
 
-// #define DEBUG                // debug prints on/off
+#define DEBUG                // debug prints on/off
 // #define TUNING               // tuning prints on/off
-#define PREDATOR             // predator algorithm on/off
-#define PREDATOR_DEBUG       // predator debug prints on/off
-#define FFT_TIMING           // timed FFT on/off
+// #define PREDATOR             // predator algorithm on/off
+// #define PREDATOR_DEBUG       // predator debug prints on/off
+// #define FFT_TIMING           // timed FFT on/off
 
 /////////////////////////////////
 
@@ -347,7 +347,7 @@ void sampling_ISR() {
 void trigger_filter_hornet_ISR() {
 
     hornet_pin.rise(NULL);  // detach to avoid queueing
-    // red = 1;             // use this to debug
+    red = 1;             // use this to debug
 
 }
 
